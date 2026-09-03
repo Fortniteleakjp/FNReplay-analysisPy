@@ -1,4 +1,4 @@
-# fnreplay
+# fnreplayPy
 
 Fortnite / Unreal Engine のリプレイファイル (`.replay`) を解析する Python ライブラリです。
 C# 実装の [Shiqan/FortniteReplayDecompressor](https://github.com/Shiqan/FortniteReplayDecompressor) を Python へ移植しました。
