@@ -1,0 +1,56 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "fnreplay"
+version = "0.1.0"
+description = "Fortnite / Unreal Engine のリプレイファイルを解析する Python ライブラリ (FortniteReplayDecompressor の移植)"
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [{ name = "FLJPNews" }]
+keywords = ["fortnite", "replay", "unreal", "parser", "oodle"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Games/Entertainment",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+dependencies = []
+
+[project.optional-dependencies]
+# 復号を高速化する (無くても純 Python 実装で動作する)
+crypto = ["cryptography>=41"]
+dev = ["pytest>=7", "ruff>=0.4"]
+
+[project.scripts]
+fnreplay = "fnreplay.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/FLJPNews/FNReplay-analysis"
+"Original (C#)" = "https://github.com/Shiqan/FortniteReplayDecompressor"
+
+[tool.setuptools.packages.find]
+include = ["fnreplay*"]
+
+[tool.setuptools.package-data]
+fnreplay = ["py.typed"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B"]
+ignore = ["E501"]
+
+[tool.ruff.lint.per-file-ignores]
+"fnreplay/fortnite/exports/generated.py" = ["E501", "F403", "F405"]
+"fnreplay/fortnite/exports/__init__.py" = ["F401", "F403"]

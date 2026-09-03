@@ -1,0 +1,12 @@
+# 既定でテキストとして扱い、リポジトリ内では LF に正規化する
+* text=auto
+
+# 明示しておくとコミット済みの旧版が UTF-16 でもテキストとして差分表示される
+*.md   text diff
+*.py   text diff
+*.toml text diff
+
+# バイナリ
+*.replay binary
+*.dump binary
+*.dll binary
