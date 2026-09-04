@@ -9,7 +9,10 @@ from enum import IntEnum, IntFlag
 
 
 class EngineNetworkVersionHistory(IntEnum):
-    """エンジンのネットワークバージョン履歴。"""
+    """エンジンのネットワークバージョン履歴。
+
+    see https://github.com/EpicGames/UnrealEngine/blob/ue6-main/Engine/Source/Runtime/Core/Public/Misc/EngineNetworkCustomVersion.h
+    """
 
     HISTORY_INITIAL = 1
     HISTORY_REPLAY_BACKWARDS_COMPAT = 2
@@ -56,7 +59,9 @@ class EngineNetworkVersionHistory(IntEnum):
     PawnRemoteViewPitchTo16Bit = 42
     CloseChildConnection = 43
     ExplicitAckHistorySeq = 44
-    LATEST = 44
+    # 以下は Unreal Engine 6.0 系 (ue6-main の FEngineNetworkCustomVersion) の定義
+    CongestionExperiencedBit = 45
+    LATEST = 45
 
 
 class NetworkVersionHistory(IntEnum):

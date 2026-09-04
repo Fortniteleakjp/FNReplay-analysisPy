@@ -691,9 +691,18 @@ class BitReader(FArchive):
     # -- ベクトル・回転 -----------------------------------------------------
 
     def read_fvector(self) -> FVector:
+        """量子化されていないベクトルを読み取る。
+
+        UE 本体の ``FVector::NetSerialize`` は ``SerializeDoubleVectorsAsDoubles`` (22) を
+        境界にしている (量子化ベクトルの ``PackedVectorLWCSupport`` (23) とは別のバージョン)。
+
+        see https://github.com/EpicGames/UnrealEngine/blob/ue6-main/Engine/Source/Runtime/Core/Public/Math/Vector.h
+        """
         if (
             self.engine_network_version
-            >= EngineNetworkVersionHistory.HISTORY_PACKED_VECTOR_LWC_SUPPORT
+            >= EngineNetworkVersionHistory.HISTORY_SERIALIZE_DOUBLE_VECTORS_AS_DOUBLES
+            and self.engine_network_version
+            != EngineNetworkVersionHistory.HISTORY_21_AND_VIEWPITCH_ONLY_DO_NOT_USE
         ):
             return FVector(self.read_double(), self.read_double(), self.read_double())
         return FVector(self.read_single(), self.read_single(), self.read_single())
@@ -842,6 +851,21 @@ class NetBitReader(BitReader):
         return self.read_fvector()
 
     def serialize_property_vector2d(self) -> FVector2D:
+        """2 次元ベクトルを読み取る。
+
+        エンジンバージョン 22 (SerializeDoubleVectorsAsDoubles) 以降は
+        UE5 の Large World Coordinates により double 2 つで送られる。
+        float で読むと 64 ビット足りず、そのプロパティが丸ごと落ちる。
+
+        see https://github.com/EpicGames/UnrealEngine/blob/ue6-main/Engine/Source/Runtime/Core/Public/Math/Vector2D.h
+        """
+        if (
+            self.engine_network_version
+            >= EngineNetworkVersionHistory.HISTORY_SERIALIZE_DOUBLE_VECTORS_AS_DOUBLES
+            and self.engine_network_version
+            != EngineNetworkVersionHistory.HISTORY_21_AND_VIEWPITCH_ONLY_DO_NOT_USE
+        ):
+            return FVector2D(self.read_double(), self.read_double())
         return FVector2D(self.read_single(), self.read_single())
 
     def serialize_property_vector_normal(self) -> FVector:
@@ -923,6 +947,15 @@ class NetBitReader(BitReader):
             rep_movement.angular_velocity = self.serialize_property_quantized_vector(
                 velocity_quantization_level
             )
+            if (
+                self.engine_network_version
+                >= EngineNetworkVersionHistory.CongestionExperiencedBit
+            ):
+                # Unreal Engine 6.0 で追加されたテレポート連番 (3 ビット)。
+                # エンジン側にバージョン判定は無く UE6 では常に送られるため、
+                # UE6 で最初に採番されたネットワークバージョン 45 を境界として扱う。
+                # see https://github.com/EpicGames/UnrealEngine/blob/ue6-main/Engine/Source/Runtime/Engine/Private/Engine/ReplicatedState.cpp
+                rep_movement.teleport_seq = self.read_bits_to_int(3)
         if rep_server_frame:
             rep_movement.server_frame = self.read_int_packed()
         if rep_server_handle:

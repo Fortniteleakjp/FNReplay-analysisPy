@@ -80,11 +80,12 @@ def _reader(writer: BitWriter, engine_version: int) -> NetBitReader:
 
 
 def test_engine_network_version_latest() -> None:
-    """UE 5.6 系の最新バージョンまで定義されている。"""
-    assert EngineNetworkVersionHistory.LATEST == 44
+    """UE 6.0 系の最新バージョンまで定義されている。"""
+    assert EngineNetworkVersionHistory.LATEST == 45
     assert EngineNetworkVersionHistory.MontagePlayCountSerialization == 37
     assert EngineNetworkVersionHistory.PawnRemoteViewPitchTo16Bit == 42
     assert EngineNetworkVersionHistory.ExplicitAckHistorySeq == 44
+    assert EngineNetworkVersionHistory.CongestionExperiencedBit == 45
 
 
 # ---------------------------------------------------------------------------
@@ -335,3 +336,118 @@ def test_player_controller_channel_open(
 
     assert archive.position == expected_bits
     assert not archive.is_error
+
+
+# ---------------------------------------------------------------------------
+# RepMovement の TeleportSeq (Unreal Engine 6.0)
+# ---------------------------------------------------------------------------
+
+
+def _rep_movement_writer(*, teleport_seq: int | None) -> BitWriter:
+    """``bRepPhysics`` を立てた RepMovement のビット列を作る。
+
+    量子化ベクトルは「成分ビット数 0 / extra_info 0」を選んで float 3 つで書く。
+    回転は 3 成分とも「送らない」ビットだけを書く。
+    """
+    writer = BitWriter()
+    writer.bit(0)  # bSimulatedPhysicSleep
+    writer.bit(1)  # bRepPhysics
+    writer.bit(0)  # bRepServerFrame
+    writer.bit(0)  # bRepServerHandle
+
+    def vector() -> None:
+        writer.bits(0, 7)  # ComponentBitCount = 0 / ExtraInfo = 0
+        writer.single(0.0).single(0.0).single(0.0)
+
+    vector()  # Location
+    writer.bit(0).bit(0).bit(0)  # Rotation (pitch / yaw / roll とも未送信)
+    vector()  # LinearVelocity
+    vector()  # AngularVelocity (bRepPhysics のため)
+    if teleport_seq is not None:
+        writer.bits(teleport_seq, 3)  # TeleportSeq (UE 6.0)
+    writer.bit(0)  # bRepAcceleration
+    return writer
+
+
+def test_rep_movement_reads_teleport_seq_on_engine_6() -> None:
+    """UE 6.0 (ネットワークバージョン 45) では TeleportSeq を 3 ビット読む。"""
+    reader = _reader(
+        _rep_movement_writer(teleport_seq=5),
+        EngineNetworkVersionHistory.CongestionExperiencedBit,
+    )
+
+    movement = reader.serialize_rep_movement()
+
+    assert movement.rep_physics is True
+    assert movement.teleport_seq == 5
+    assert not reader.is_error
+    assert reader.at_end()
+
+
+def test_rep_movement_has_no_teleport_seq_before_engine_6() -> None:
+    """UE 5.x (ネットワークバージョン 44 以下) では TeleportSeq は送られない。"""
+    reader = _reader(
+        _rep_movement_writer(teleport_seq=None),
+        EngineNetworkVersionHistory.ExplicitAckHistorySeq,
+    )
+
+    movement = reader.serialize_rep_movement()
+
+    assert movement.rep_physics is True
+    assert movement.teleport_seq == 0
+    assert not reader.is_error
+    assert reader.at_end()
+
+
+# ---------------------------------------------------------------------------
+# Large World Coordinates (UE5 以降の倍精度ベクトル)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "engine_version,expected_bits",
+    [
+        # float 2 つ
+        (EngineNetworkVersionHistory.HISTORY_INTERFACE_PROPERTY_SERIALIZATION, 64),
+        (EngineNetworkVersionHistory.HISTORY_MONTAGE_PLAY_INST_ID_SERIALIZATION, 64),
+        # 26 は「21 まで + RemoteViewPitch」なので float のまま
+        (EngineNetworkVersionHistory.HISTORY_21_AND_VIEWPITCH_ONLY_DO_NOT_USE, 64),
+        # double 2 つ
+        (EngineNetworkVersionHistory.HISTORY_SERIALIZE_DOUBLE_VECTORS_AS_DOUBLES, 128),
+        (EngineNetworkVersionHistory.ExplicitAckHistorySeq, 128),
+        (EngineNetworkVersionHistory.CongestionExperiencedBit, 128),
+    ],
+)
+def test_property_vector2d_uses_doubles_from_engine_22(
+    engine_version: EngineNetworkVersionHistory, expected_bits: int
+) -> None:
+    """FVector2D はエンジンバージョン 22 以降 double 2 つになる。"""
+    reader = NetBitReader(bytes(32))
+    reader.engine_network_version = engine_version
+
+    reader.serialize_property_vector2d()
+
+    assert reader.position == expected_bits
+    assert not reader.is_error
+
+
+@pytest.mark.parametrize(
+    "engine_version,expected_bits",
+    [
+        (EngineNetworkVersionHistory.HISTORY_MONTAGE_PLAY_INST_ID_SERIALIZATION, 96),
+        (EngineNetworkVersionHistory.HISTORY_21_AND_VIEWPITCH_ONLY_DO_NOT_USE, 96),
+        (EngineNetworkVersionHistory.HISTORY_SERIALIZE_DOUBLE_VECTORS_AS_DOUBLES, 192),
+        (EngineNetworkVersionHistory.CongestionExperiencedBit, 192),
+    ],
+)
+def test_fvector_uses_doubles_from_engine_22(
+    engine_version: EngineNetworkVersionHistory, expected_bits: int
+) -> None:
+    """量子化されていない FVector も同じ 22 が境界 (23 ではない)。"""
+    reader = NetBitReader(bytes(32))
+    reader.engine_network_version = engine_version
+
+    reader.read_fvector()
+
+    assert reader.position == expected_bits
+    assert not reader.is_error

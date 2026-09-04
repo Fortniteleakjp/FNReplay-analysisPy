@@ -1173,9 +1173,9 @@ class SupplyDrop(ExportGroup):
         field("bHasSpawnedPickups", "b_has_spawned_pickups", RepLayoutCmdType.PropertyBool),
         field("Opened", "opened", RepLayoutCmdType.PropertyBool),
         field("BalloonPopped", "balloon_popped", RepLayoutCmdType.PropertyBool),
-        field("FallSpeed", "fall_speed", RepLayoutCmdType.PropertyFloat),
+        field("FallSpeed", "fall_speed", RepLayoutCmdType.PropertyDouble),
         field("LandingLocation", "landing_location", RepLayoutCmdType.PropertyVector),
-        field("FallHeight", "fall_height", RepLayoutCmdType.PropertyFloat),
+        field("FallHeight", "fall_height", RepLayoutCmdType.PropertyDouble),
     ]
 
 
