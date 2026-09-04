@@ -80,11 +80,12 @@ def _reader(writer: BitWriter, engine_version: int) -> NetBitReader:
 
 
 def test_engine_network_version_latest() -> None:
-    """UE 5.6 系の最新バージョンまで定義されている。"""
-    assert EngineNetworkVersionHistory.LATEST == 44
+    """UE 6.0 系の最新バージョンまで定義されている。"""
+    assert EngineNetworkVersionHistory.LATEST == 45
     assert EngineNetworkVersionHistory.MontagePlayCountSerialization == 37
     assert EngineNetworkVersionHistory.PawnRemoteViewPitchTo16Bit == 42
     assert EngineNetworkVersionHistory.ExplicitAckHistorySeq == 44
+    assert EngineNetworkVersionHistory.CongestionExperiencedBit == 45
 
 
 # ---------------------------------------------------------------------------
@@ -335,3 +336,64 @@ def test_player_controller_channel_open(
 
     assert archive.position == expected_bits
     assert not archive.is_error
+
+
+# ---------------------------------------------------------------------------
+# RepMovement の TeleportSeq (Unreal Engine 6.0)
+# ---------------------------------------------------------------------------
+
+
+def _rep_movement_writer(*, teleport_seq: int | None) -> BitWriter:
+    """``bRepPhysics`` を立てた RepMovement のビット列を作る。
+
+    量子化ベクトルは「成分ビット数 0 / extra_info 0」を選んで float 3 つで書く。
+    回転は 3 成分とも「送らない」ビットだけを書く。
+    """
+    writer = BitWriter()
+    writer.bit(0)  # bSimulatedPhysicSleep
+    writer.bit(1)  # bRepPhysics
+    writer.bit(0)  # bRepServerFrame
+    writer.bit(0)  # bRepServerHandle
+
+    def vector() -> None:
+        writer.bits(0, 7)  # ComponentBitCount = 0 / ExtraInfo = 0
+        writer.single(0.0).single(0.0).single(0.0)
+
+    vector()  # Location
+    writer.bit(0).bit(0).bit(0)  # Rotation (pitch / yaw / roll とも未送信)
+    vector()  # LinearVelocity
+    vector()  # AngularVelocity (bRepPhysics のため)
+    if teleport_seq is not None:
+        writer.bits(teleport_seq, 3)  # TeleportSeq (UE 6.0)
+    writer.bit(0)  # bRepAcceleration
+    return writer
+
+
+def test_rep_movement_reads_teleport_seq_on_engine_6() -> None:
+    """UE 6.0 (ネットワークバージョン 45) では TeleportSeq を 3 ビット読む。"""
+    reader = _reader(
+        _rep_movement_writer(teleport_seq=5),
+        EngineNetworkVersionHistory.CongestionExperiencedBit,
+    )
+
+    movement = reader.serialize_rep_movement()
+
+    assert movement.rep_physics is True
+    assert movement.teleport_seq == 5
+    assert not reader.is_error
+    assert reader.at_end()
+
+
+def test_rep_movement_has_no_teleport_seq_before_engine_6() -> None:
+    """UE 5.x (ネットワークバージョン 44 以下) では TeleportSeq は送られない。"""
+    reader = _reader(
+        _rep_movement_writer(teleport_seq=None),
+        EngineNetworkVersionHistory.ExplicitAckHistorySeq,
+    )
+
+    movement = reader.serialize_rep_movement()
+
+    assert movement.rep_physics is True
+    assert movement.teleport_seq == 0
+    assert not reader.is_error
+    assert reader.at_end()

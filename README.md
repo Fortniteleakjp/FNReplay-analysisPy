@@ -13,7 +13,7 @@ C# 実装の [Shiqan/FortniteReplayDecompressor](https://github.com/Shiqan/Fortn
 - AES-256 ECB 復号。`cryptography` / `pycryptodome` があれば自動で利用、無ければ内蔵実装
 - 解析の深さを `ParseMode` で切り替え可能 (速度と情報量のトレードオフ)
 - CLI 付き (`python -m fnreplay`) — 概要表示と JSON 書き出し
-- Unreal Engine 5.6 (エンジンネットワークバージョン 44) / Fortnite ビルド 41.x まで対応
+- Unreal Engine 6.0 (エンジンネットワークバージョン 45) / Fortnite ビルド 42.x まで対応
 
 ## 動作環境
 
@@ -275,13 +275,16 @@ FNREPLAY_TEST_REPLAYS=/path/to/replays python -m pytest
 3. **チャンネル切断時の通知** — C# 版はチャンネルを破棄した後にアクターを参照するため常に `null` になりますが、本実装は破棄前のアクターを渡します。
 4. **撃破イベントの座標 (新しいリプレイ)** — エンジンバージョン 34 以降は transform が倍精度 (UE5 の LWC) になります。C# 版は 80 バイト読み飛ばして座標を捨てていますが、本実装は実際の値として解析します (消費バイト数は同じ)。
 5. **`RepMovement` の回転量子化** — Fortnite ビルド 41.00 で、属性指定の無いアクター (PlayerPawn など) の回転量子化が 8 ビットから 16 ビットに拡大されました。`EngineNetworkVersion` は 40.x / 41.x とも 44 のままで判別できないため、リプレイのブランチ名と変更リスト番号から判定します ([FortniteReplayDecompressor#77](https://github.com/Shiqan/FortniteReplayDecompressor/pull/77) と同じ方式)。判定を誤った場合はもう一方の設定で読み直します。
-6. **エンジンバージョン 37〜44** — Unreal Engine の `FEngineNetworkCustomVersion` に合わせて定義を追加し、次のバージョン差分に対応しました。
+6. **エンジンバージョン 37〜45** — Unreal Engine の `FEngineNetworkCustomVersion` に合わせて定義を追加し、次のバージョン差分に対応しました。
    - `FPredictionKey`: バージョン 34 以降は BaseKey が複製されない
    - `FGameplayAbilityRepAnimMontage`: バージョン 33 の `bIsMontage` / 37 の `PlayCount` に対応し、Position を UE と同じ float として読む (C# 版は圧縮整数として読んでいます)
    - `RemoteViewPitch16`: バージョン 42 で追加された 16 ビット版のプロパティ
    - プレイヤーコントローラーのチャンネルオープン: バージョン 41 の `ClientHandshakeId`、43 の `LocalPlayerConnectionIdentifier` を読み取る (本家 C# はこの 8 バイトを読まないため、以降のプロパティがすべてずれます)
+   - `FRepMovement`: Unreal Engine 6.0 (バージョン 45) で `bRepPhysics` のときに 3 ビットの `TeleportSeq` が追加されました。エンジン側にバージョン判定は無く UE6 では常に送られるため、UE6 で最初に採番されたバージョン 45 を境界にしています
+   - バージョン 45 の `CongestionExperiencedBit` はパケット情報ヘッダーのビットで、リプレイは `IsInternalAck` 扱いでヘッダーを読まないため解析には影響しません
 7. **`CurrentPlaylistInfo`** — ビルド 41 以降は末尾にフィールドが追加されています。プレイリスト ID の位置は変わらないため ID はそのまま読み取り、残りは `extra_bits` として保持します。
-8. **未対応部分** — 差分チェックポイント (delta checkpoints)、Mermaid モード 0、エントロピー符号化された Oodle サブストリームは本家と同じく未対応です。
+8. **壊れたバンチの打ち切り** — Unreal 本体と同じく、バンチがパケットからはみ出している場合 (`UNetConnection::ReceivedPacket`) と、コンテンツブロックの読み取りが失敗した場合 (`UActorChannel::ProcessBunch`) はそのパケット / バンチを打ち切ります。打ち切らないと読み取り位置が進まないまま解析ループが終わらなくなります ([FortniteReplayDecompressor#75](https://github.com/Shiqan/FortniteReplayDecompressor/pull/75) / [#78](https://github.com/Shiqan/FortniteReplayDecompressor/pull/78) と同じ対処)。
+9. **未対応部分** — 差分チェックポイント (delta checkpoints)、Mermaid モード 0、エントロピー符号化された Oodle サブストリームは本家と同じく未対応です。
 
 ## ライセンスについて
 

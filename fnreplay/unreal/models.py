@@ -724,6 +724,8 @@ class FRepMovement:
     simulated_physic_sleep: bool = False
     rep_physics: bool = False
     rep_acceleration: bool = False
+    #: テレポート連番 (3 ビット)。Unreal Engine 6.0 以降で ``rep_physics`` のときだけ届く
+    teleport_seq: int = 0
     server_frame: int = 0
     server_physics_handle: int = 0
     location_quantization_level: VectorQuantization = VectorQuantization.RoundTwoDecimals

@@ -759,6 +759,22 @@ class ReplayReader:
                 bit_reader.set_temp_end(bunch_data_bits, ArchiveEndIndex.BUNCH)
                 bunch.archive = bit_reader
 
+            if bit_reader.is_error:
+                # バンチがパケットの残りより大きいと主張している = ストリームが壊れている。
+                # 部分バンチでは read_bits が、そうでなければ set_temp_end が
+                # 読み取り位置を進めないまま is_error を立てるため、そのまま続行すると
+                # at_end() が真にならず while ループが終わらない。
+                # UE も UNetConnection::ReceivedPacket で FInBunch::ResetData 直後に
+                # Reader.IsError() を見て、そのパケットごと破棄している
+                # (ENetCloseResult::BunchDataOverflow)。
+                # see https://github.com/EpicGames/UnrealEngine/blob/release/Engine/Source/Runtime/Engine/Private/NetConnection.cpp
+                logger.warning(
+                    "バンチ (%s ビット) がパケット %s に収まりません。このパケットを破棄します。",
+                    bunch_data_bits,
+                    self._packet_index,
+                )
+                break
+
             self._bunch_index += 1
 
             if bunch.b_has_package_map_exports:
@@ -951,6 +967,20 @@ class ReplayReader:
             rep_object, object_deleted, has_rep_layout, payload = self.read_content_block_payload(
                 bunch
             )
+
+            if bunch.archive.is_error:
+                # コンテンツブロックがずれている場合、アーカイブは is_error を立てたまま
+                # 読み取り位置が終端に届かない (エラー後の読み取りは何もしない) ため、
+                # 下の ``payload is None`` の continue に落ちると while ループが終わらない。
+                # UE の UActorChannel::ProcessBunch も ReadContentBlockPayload の直後に
+                # Bunch.IsError() を見てバンチの処理を打ち切る。
+                # see https://github.com/EpicGames/UnrealEngine/blob/release/Engine/Source/Runtime/Engine/Private/DataChannel.cpp
+                logger.warning(
+                    "read_content_block_payload でエラーが発生しました。バンチ %s を打ち切ります。",
+                    self._bunch_index,
+                )
+                break
+
             if payload is None:
                 continue
 

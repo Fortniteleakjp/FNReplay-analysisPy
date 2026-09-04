@@ -923,6 +923,15 @@ class NetBitReader(BitReader):
             rep_movement.angular_velocity = self.serialize_property_quantized_vector(
                 velocity_quantization_level
             )
+            if (
+                self.engine_network_version
+                >= EngineNetworkVersionHistory.CongestionExperiencedBit
+            ):
+                # Unreal Engine 6.0 で追加されたテレポート連番 (3 ビット)。
+                # エンジン側にバージョン判定は無く UE6 では常に送られるため、
+                # UE6 で最初に採番されたネットワークバージョン 45 を境界として扱う。
+                # see https://github.com/EpicGames/UnrealEngine/blob/ue6-main/Engine/Source/Runtime/Engine/Private/Engine/ReplicatedState.cpp
+                rep_movement.teleport_seq = self.read_bits_to_int(3)
         if rep_server_frame:
             rep_movement.server_frame = self.read_int_packed()
         if rep_server_handle:
