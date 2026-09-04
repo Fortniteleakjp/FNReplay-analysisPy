@@ -282,6 +282,8 @@ FNREPLAY_TEST_REPLAYS=/path/to/replays python -m pytest
    - プレイヤーコントローラーのチャンネルオープン: バージョン 41 の `ClientHandshakeId`、43 の `LocalPlayerConnectionIdentifier` を読み取る (本家 C# はこの 8 バイトを読まないため、以降のプロパティがすべてずれます)
    - `FRepMovement`: Unreal Engine 6.0 (バージョン 45) で `bRepPhysics` のときに 3 ビットの `TeleportSeq` が追加されました。エンジン側にバージョン判定は無く UE6 では常に送られるため、UE6 で最初に採番されたバージョン 45 を境界にしています
    - バージョン 45 の `CongestionExperiencedBit` はパケット情報ヘッダーのビットで、リプレイは `IsInternalAck` 扱いでヘッダーを読まないため解析には影響しません
+   - `FVector2D`: バージョン 22 (`SerializeDoubleVectorsAsDoubles`) 以降は double 2 つで送られます (UE5 の Large World Coordinates)。float で読むと 64 ビット足りず、そのプロパティが丸ごと落ちます (C# 版も同じ不具合)
+   - `FVector` (量子化なし) の境界も UE 本体に合わせて 22 にしました。量子化ベクトルの `PackedVectorLWCSupport` (23) とは別のバージョンです
 7. **`CurrentPlaylistInfo`** — ビルド 41 以降は末尾にフィールドが追加されています。プレイリスト ID の位置は変わらないため ID はそのまま読み取り、残りは `extra_bits` として保持します。
 8. **壊れたバンチの打ち切り** — Unreal 本体と同じく、バンチがパケットからはみ出している場合 (`UNetConnection::ReceivedPacket`) と、コンテンツブロックの読み取りが失敗した場合 (`UActorChannel::ProcessBunch`) はそのパケット / バンチを打ち切ります。打ち切らないと読み取り位置が進まないまま解析ループが終わらなくなります ([FortniteReplayDecompressor#75](https://github.com/Shiqan/FortniteReplayDecompressor/pull/75) / [#78](https://github.com/Shiqan/FortniteReplayDecompressor/pull/78) と同じ対処)。
 9. **未対応部分** — 差分チェックポイント (delta checkpoints)、Mermaid モード 0、エントロピー符号化された Oodle サブストリームは本家と同じく未対応です。

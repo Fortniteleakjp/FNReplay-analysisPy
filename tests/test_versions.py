@@ -397,3 +397,57 @@ def test_rep_movement_has_no_teleport_seq_before_engine_6() -> None:
     assert movement.teleport_seq == 0
     assert not reader.is_error
     assert reader.at_end()
+
+
+# ---------------------------------------------------------------------------
+# Large World Coordinates (UE5 以降の倍精度ベクトル)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "engine_version,expected_bits",
+    [
+        # float 2 つ
+        (EngineNetworkVersionHistory.HISTORY_INTERFACE_PROPERTY_SERIALIZATION, 64),
+        (EngineNetworkVersionHistory.HISTORY_MONTAGE_PLAY_INST_ID_SERIALIZATION, 64),
+        # 26 は「21 まで + RemoteViewPitch」なので float のまま
+        (EngineNetworkVersionHistory.HISTORY_21_AND_VIEWPITCH_ONLY_DO_NOT_USE, 64),
+        # double 2 つ
+        (EngineNetworkVersionHistory.HISTORY_SERIALIZE_DOUBLE_VECTORS_AS_DOUBLES, 128),
+        (EngineNetworkVersionHistory.ExplicitAckHistorySeq, 128),
+        (EngineNetworkVersionHistory.CongestionExperiencedBit, 128),
+    ],
+)
+def test_property_vector2d_uses_doubles_from_engine_22(
+    engine_version: EngineNetworkVersionHistory, expected_bits: int
+) -> None:
+    """FVector2D はエンジンバージョン 22 以降 double 2 つになる。"""
+    reader = NetBitReader(bytes(32))
+    reader.engine_network_version = engine_version
+
+    reader.serialize_property_vector2d()
+
+    assert reader.position == expected_bits
+    assert not reader.is_error
+
+
+@pytest.mark.parametrize(
+    "engine_version,expected_bits",
+    [
+        (EngineNetworkVersionHistory.HISTORY_MONTAGE_PLAY_INST_ID_SERIALIZATION, 96),
+        (EngineNetworkVersionHistory.HISTORY_21_AND_VIEWPITCH_ONLY_DO_NOT_USE, 96),
+        (EngineNetworkVersionHistory.HISTORY_SERIALIZE_DOUBLE_VECTORS_AS_DOUBLES, 192),
+        (EngineNetworkVersionHistory.CongestionExperiencedBit, 192),
+    ],
+)
+def test_fvector_uses_doubles_from_engine_22(
+    engine_version: EngineNetworkVersionHistory, expected_bits: int
+) -> None:
+    """量子化されていない FVector も同じ 22 が境界 (23 ではない)。"""
+    reader = NetBitReader(bytes(32))
+    reader.engine_network_version = engine_version
+
+    reader.read_fvector()
+
+    assert reader.position == expected_bits
+    assert not reader.is_error
